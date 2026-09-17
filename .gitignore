@@ -1,0 +1,14 @@
+# Gradle / Android
+.gradle/
+build/
+local.properties
+.kotlin/
+.idea/
+*.iml
+
+# Chave de assinatura: NUNCA versionar (veja README > Assinatura)
+app/keystore/
+
+# Binários gerados (publicados em Releases)
+*.apk
+*.aab

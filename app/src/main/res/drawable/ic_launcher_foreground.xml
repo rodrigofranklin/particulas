@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- a handful of glowing "particles" of different colours -->
+    <path android:fillColor="#FF4FC3F7" android:pathData="M54,54 m-9,0 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0" />
+    <path android:fillColor="#FFFF6EC7" android:pathData="M34,40 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+    <path android:fillColor="#FFFFD54F" android:pathData="M74,38 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+    <path android:fillColor="#FF69F0AE" android:pathData="M72,70 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+    <path android:fillColor="#FFB388FF" android:pathData="M36,72 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <path android:fillColor="#FFFF8A65" android:pathData="M54,28 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+    <path android:fillColor="#FF80DEEA" android:pathData="M54,82 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M54,54 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0" />
+</vector>

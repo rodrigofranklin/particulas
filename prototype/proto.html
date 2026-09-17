@@ -1,0 +1,104 @@
+<!doctype html><html><head><meta charset="utf-8"><title>proto</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;touch-action:none}</style></head>
+<body><canvas id="c"></canvas><script>
+// Port 1:1 da física do ParticleView.kt para conferir o ajuste das constantes.
+const dp = parseFloat(new URLSearchParams(location.search).get("dp")) || 2.75; // densidade de um celular típico (?dp= para testes)
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let w = 0, h = 0, n = 0, px, py, vx, vy, hue, glow;
+const MAXF = 16, TRAIL_LEN = 40, MAX_SPARKS = 1200, HUE_SPIN = 30, PULSE_PERIOD = 3;
+const fActive = new Array(MAXF).fill(false), fX = [], fY = [], fHue0 = [], fHue = [], fAge = [], fId = new Array(MAXF).fill(-1), fSeq = new Array(MAXF).fill(0);
+const fLastSeq = new Array(MAXF).fill(-1), fPulses = [], fSpin = [], fRadialK = [], fSwirlK = [], fPrevX = [], fPrevY = [];
+const tX = new Float32Array(MAXF*TRAIL_LEN), tY = new Float32Array(MAXF*TRAIL_LEN), tHead = new Array(MAXF).fill(0), tCount = new Array(MAXF).fill(0), tHue = [];
+const sX = new Float32Array(MAX_SPARKS), sY = new Float32Array(MAX_SPARKS), sVX = new Float32Array(MAX_SPARKS), sVY = new Float32Array(MAX_SPARKS), sLife = new Float32Array(MAX_SPARKS), sHue = new Float32Array(MAX_SPARKS); let sNext = 0;
+let bursts = [], nextHue = Math.random()*360, time = 0, seqCounter = 0;
+let reach, burstReach;
+const core = 34*dp, pull = 0.34*dp, swirl = 0.55*dp, corePush = 1.6*dp, flowForce = 0.035*dp, burstImpulse = 22*dp, vMax = 14*dp, damping = 0.972;
+function resize(){
+  w = cv.width = innerWidth; h = cv.height = innerHeight;
+  reach = 0.42*Math.min(w,h); burstReach = 0.6*Math.min(w,h);
+  if(!n){
+    n = Math.min(6000, Math.max(1500, Math.floor(w*h/(300*dp*dp))));
+    px = new Float32Array(n); py = new Float32Array(n); vx = new Float32Array(n); vy = new Float32Array(n); hue = new Float32Array(n); glow = new Float32Array(n);
+    for(let i=0;i<n;i++){px[i]=Math.random()*w;py[i]=Math.random()*h;vx[i]=(Math.random()-.5)*dp;vy[i]=(Math.random()-.5)*dp;hue[i]=Math.random()*360;}
+  }
+}
+addEventListener('resize', resize); resize();
+function lerpHue(a,b,k){let d=(b-a)%360; if(d>180)d-=360; if(d<-180)d+=360; return a+d*k;}
+function heldHue(f){ return (fHue0[f] + fAge[f]*HUE_SPIN) % 360; }
+function updateHeldFingers(){
+  for(let f=0;f<MAXF;f++){
+    if(!fActive[f]){ fLastSeq[f] = -1; continue; }
+    if(fSeq[f]!==fLastSeq[f]){ fLastSeq[f]=fSeq[f]; fPulses[f]=0; fSpin[f]=Math.random()<.5?1:-1; tCount[f]=0; fPrevX[f]=fX[f]; fPrevY[f]=fY[f]; }
+    tHue[f] = fHue[f];
+    const age = fAge[f], breathe = Math.sin(age*1.4);
+    fRadialK[f] = 0.6 + 0.8*breathe;
+    fSwirlK[f] = (1 + 0.6*Math.cos(age*0.9)) * fSpin[f];
+    const due = Math.floor(age/PULSE_PERIOD);
+    if(due > fPulses[f]){ fPulses[f]=due; fSpin[f]=-fSpin[f]; bursts.push({x:fX[f],y:fY[f],h:fHue[f],str:0.6}); }
+  }
+}
+function updateTrails(dt,s){
+  const sparkDamp = Math.pow(0.93,s);
+  for(let f=0;f<MAXF;f++){
+    if(fActive[f]){
+      tHead[f]=(tHead[f]+1)%TRAIL_LEN; tX[f*TRAIL_LEN+tHead[f]]=fX[f]; tY[f*TRAIL_LEN+tHead[f]]=fY[f]; if(tCount[f]<TRAIL_LEN)tCount[f]++;
+      const dx=fX[f]-fPrevX[f], dy=fY[f]-fPrevY[f], dist=Math.sqrt(dx*dx+dy*dy);
+      const count=Math.min(Math.floor(dist/(1.5*dp)),14);
+      for(let k=0;k<count;k++){
+        const u=(k+Math.random())/count, i=sNext; sNext=(sNext+1)%MAX_SPARKS;
+        sX[i]=fPrevX[f]+dx*u; sY[i]=fPrevY[f]+dy*u;
+        const side=(Math.random()-.5)*2, nx=-dy/(dist+.01), ny=dx/(dist+.01), spd=(2+Math.random()*5)*dp;
+        sVX[i]=nx*side*spd+dx*0.15+(Math.random()-.5)*dp; sVY[i]=ny*side*spd+dy*0.15+(Math.random()-.5)*dp;
+        sLife[i]=0.5+Math.random()*0.7; sHue[i]=fHue[f]+(Math.random()-.5)*40;
+      }
+      if(count===0){ for(let k=0;k<2;k++){ const i=sNext; sNext=(sNext+1)%MAX_SPARKS; const ang=fAge[f]*4*fSpin[f]+k*3.1416+(Math.random()-.5)*0.4, spd=(2.5+Math.random()*3)*dp; sX[i]=fX[f]; sY[i]=fY[f]; sVX[i]=Math.cos(ang)*spd; sVY[i]=Math.sin(ang)*spd; sLife[i]=0.6+Math.random()*0.6; sHue[i]=fHue[f]+(Math.random()-.5)*30; } }
+      fPrevX[f]=fX[f]; fPrevY[f]=fY[f];
+    } else if(tCount[f]>0){ tCount[f]=Math.max(0, tCount[f]-Math.max(1,Math.floor(3*s))); }
+  }
+  for(let i=0;i<MAX_SPARKS;i++){ if(sLife[i]<=0)continue; sLife[i]-=dt; sX[i]+=sVX[i]*s; sY[i]+=sVY[i]*s; sVX[i]*=sparkDamp; sVY[i]*=sparkDamp; }
+}
+function step(dt){
+  const s = dt*60; time += dt; const t = time, reach2 = reach*reach, flowK = 0.0345/dp, jitter = 0.05*dp, dampS = Math.pow(damping,s), glowDecay = Math.pow(0.9,s), vMax2 = vMax*vMax;
+  updateHeldFingers(); updateTrails(dt,s);
+  for(const b of bursts){ const r=burstReach*(0.6+0.4*b.str), r2=r*r; for(let i=0;i<n;i++){const dx=px[i]-b.x, dy=py[i]-b.y, d2=dx*dx+dy*dy; if(d2<r2){const d=Math.sqrt(d2)+1, q=1-d/r, imp=burstImpulse*b.str*q*q; vx[i]+=dx/d*imp; vy[i]+=dy/d*imp; if(q>glow[i])glow[i]=q; hue[i]=lerpHue(hue[i],b.h,q*0.8);}}}
+  bursts = [];
+  for(let i=0;i<n;i++){
+    let x=px[i], y=py[i], g=0, th=0; const a=x*flowK+t*0.31, b=y*flowK*1.37+t*0.23, cc=x*flowK*0.6-t*0.17, d=y*flowK*0.8+t*0.29; let ax=flowForce*(1.37*Math.sin(a)*Math.cos(b)-0.8*Math.cos(cc)*Math.sin(d))+(Math.random()-.5)*jitter, ay=-flowForce*(Math.cos(a)*Math.sin(b)-0.6*Math.sin(cc)*Math.cos(d))+(Math.random()-.5)*jitter;
+    for(let f=0;f<MAXF;f++){ if(!fActive[f])continue; const dx=fX[f]-x, dy=fY[f]-y, d2=dx*dx+dy*dy; if(d2>=reach2)continue; const d=Math.sqrt(d2)+1, q=1-d/reach, q2=q*q; let radial=pull*q2*fRadialK[f]; if(d<core) radial-=corePush*(1-d/core); const tang=swirl*q2*fSwirlK[f], ux=dx/d, uy=dy/d; ax+=ux*radial-uy*tang; ay+=uy*radial+ux*tang; if(q2>g){g=q2;th=fHue[f];}}
+    let cvx=vx[i]+ax*s, cvy=vy[i]+ay*s; const sp2=cvx*cvx+cvy*cvy; if(sp2>vMax2){const k=vMax/Math.sqrt(sp2); cvx*=k; cvy*=k;}
+    cvx*=dampS; cvy*=dampS; x+=cvx*s; y+=cvy*s;
+    if(x<0){x=-x;cvx=Math.abs(cvx)*0.8}else if(x>=w){x=2*w-x-1;cvx=-Math.abs(cvx)*0.8}
+    if(y<0){y=-y;cvy=Math.abs(cvy)*0.8}else if(y>=h){y=2*h-y-1;cvy=-Math.abs(cvy)*0.8}
+    if(x<0||x>=w)x=Math.random()*w; if(y<0||y>=h)y=Math.random()*h;
+    px[i]=x;py[i]=y;vx[i]=cvx;vy[i]=cvy;
+    const old=glow[i]*glowDecay; glow[i]=g>old?g:old;
+    hue[i]= g>0 ? lerpHue(hue[i],th,Math.min(1,0.12*g*s)) : hue[i]+0.04*s;
+  }
+}
+const widths=[2.2,3.2,4.6,6.8], sats=[95,85,55,22], vals=[82,92,100,100], alphas=[200/255,225/255,1,1];
+function hsvCss(hC,S,V,A){ const L=V*(1-S/200); const Sl=L===0||L===100?0:(V-L)/Math.min(L,100-L)*100; return `hsla(${hC},${Sl}%,${L}%,${A})`; }
+function render(){
+  ctx.globalCompositeOperation='source-over'; ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
+  ctx.globalCompositeOperation='lighter'; ctx.lineCap='round';
+  for(let f=0;f<MAXF;f++){ if(!fActive[f])continue; const sc=1.25+0.35*Math.sin(fAge[f]*1.4), R=110*dp*sc; const gr=ctx.createRadialGradient(fX[f],fY[f],0,fX[f],fY[f],R); gr.addColorStop(0,`hsla(${fHue[f]},75%,60%,0.59)`); gr.addColorStop(0.4,`hsla(${fHue[f]},75%,60%,0.24)`); gr.addColorStop(1,`hsla(${fHue[f]},75%,60%,0)`); ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(fX[f],fY[f],R,0,7); ctx.fill(); }
+  for(let f=0;f<MAXF;f++){ const cnt=tCount[f]; if(cnt<2)continue; const base=f*TRAIL_LEN; let idx=tHead[f], xp=tX[base+idx], yp=tY[base+idx];
+    for(let k=1;k<cnt;k++){ idx=(idx-1+TRAIL_LEN)%TRAIL_LEN; const x=tX[base+idx], y=tY[base+idx], fade=1-k/TRAIL_LEN; ctx.lineWidth=(1+11*fade)*dp; ctx.strokeStyle=hsvCss(tHue[f],60,100,(210*fade*fade)/255); ctx.beginPath(); ctx.moveTo(xp,yp); ctx.lineTo(x,y); ctx.stroke(); xp=x; yp=y; } }
+  const bins = new Map();
+  function put(key,x0,y0,x,y){ let a=bins.get(key); if(!a){a=[];bins.set(key,a);} a.push(x0,y0,x,y); }
+  for(let i=0;i<n;i++){ let hh=hue[i]%360; if(hh<0)hh+=360; hue[i]=hh; const hb=Math.min(11,Math.floor(hh/30)); const g=glow[i]; const gl=g<0.12?0:g<0.4?1:g<0.72?2:3; const x=px[i],y=py[i]; let x0=x-vx[i]*2.5,y0=y-vy[i]*2.5; if(Math.abs(x0-x)+Math.abs(y0-y)<0.8){x0=x+0.6;y0=y;} put(hb*4+gl,x0,y0,x,y); }
+  for(let i=0;i<MAX_SPARKS;i++){ const life=sLife[i]; if(life<=0)continue; let hh=sHue[i]%360; if(hh<0)hh+=360; const hb=Math.min(11,Math.floor(hh/30)); const gl=life>0.55?3:life>0.3?2:1; const x=sX[i],y=sY[i]; let x0=x-sVX[i]*1.5,y0=y-sVY[i]*1.5; if(Math.abs(x0-x)+Math.abs(y0-y)<0.8){x0=x+0.6;y0=y;} put(hb*4+gl,x0,y0,x,y); }
+  for(const [key,a] of bins){ const hb=key>>2, gl=key&3; ctx.strokeStyle=hsvCss((hb+0.5)*30,sats[gl],vals[gl],alphas[gl]); ctx.lineWidth=widths[gl]*dp; ctx.beginPath(); for(let k=0;k<a.length;k+=4){ctx.moveTo(a[k],a[k+1]);ctx.lineTo(a[k+2],a[k+3]);} ctx.stroke(); }
+}
+let last=performance.now(), frames=0, fpsT=last;
+function tick(dt){ for(let f=0;f<MAXF;f++) if(fActive[f]){ fAge[f]+=dt; fHue[f]=heldHue(f); } step(dt); }
+function loop(now){ let dt=(now-last)/1000; last=now; dt=Math.min(1/30,Math.max(1/240,dt)); tick(dt); render(); frames++; if(now-fpsT>1000){document.title='n='+n+' fps='+frames; frames=0; fpsT=now;} requestAnimationFrame(loop);} requestAnimationFrame(loop);
+function slotOf(id){return fId.indexOf(id);}
+function down(id,x,y){ let s=slotOf(id); if(s<0)s=slotOf(-1); if(s<0)return; fId[s]=id; fActive[s]=true; fX[s]=x; fY[s]=y; fAge[s]=0; fSeq[s]=++seqCounter; fHue0[s]=nextHue; fHue[s]=nextHue; nextHue=(nextHue+137.5)%360; }
+function move(id,x,y){ const s=slotOf(id); if(s>=0){fX[s]=x;fY[s]=y;} }
+function up(id,x,y){ const s=slotOf(id); if(s<0)return; fId[s]=-1; fActive[s]=false; bursts.push({x,y,h:heldHue(s),str:1}); }
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);down(e.pointerId,e.clientX,e.clientY)});
+cv.addEventListener('pointermove',e=>move(e.pointerId,e.clientX,e.clientY));
+cv.addEventListener('pointerup',e=>up(e.pointerId,e.clientX,e.clientY));
+cv.addEventListener('pointercancel',e=>up(e.pointerId,e.clientX,e.clientY));
+window.__test = {down,move,up, advance:(sec)=>{ const frames=Math.round(sec*60); for(let k=0;k<frames;k++) tick(1/60); render(); }, save:(name)=>fetch('/save',{method:'POST',body:JSON.stringify({name,data:cv.toDataURL('image/png')})}).then(r=>r.json())};
+</script></body></html>
