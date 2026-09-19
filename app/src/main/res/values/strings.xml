@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Partículas</string>
+    <string name="mode_particles">Partículas</string>
+    <string name="mode_fluid">Fluido</string>
+    <string name="mode_dark">Luz no escuro</string>
 </resources>

@@ -9,23 +9,32 @@
 
 ## O que faz
 
-- **Tela cheia, imersiva e fixada**: a criança só interage com as partículas.
-  O app pede a *fixação de tela* do Android ao abrir (bloqueia Home/Recentes).
-- **Até 10 dedos ao mesmo tempo** (o limite do hardware). Cada dedo vira um
-  vórtice com cor própria: atrai, faz girar, e as partículas próximas brilham e
-  mudam para a cor dele.
-- **Dedo parado nunca fica "morto"**: a cor gira como um arco-íris, o vórtice
-  "respira" (suga e empurra em ciclos), a cada 3 s sai um pulso de choque e o
-  sentido de rotação inverte, e um chafariz de faíscas em espiral sai do dedo.
-- **Arrastar** deixa uma fita luminosa e lança faíscas — quanto mais rápido,
-  mais faíscas.
-- **Soltar** o dedo explode as partículas com a cor dele.
-- **Sem dedo**, as partículas flutuam em correntes suaves com cores girando.
-- **Sair**: qualquer tecla física (voltar, volume) desfixa e fecha o app.
+Abre num menu com três botões grandes (feitos para mão de criança) e três modos.
+Só retrato — não gira. Tela cheia, imersiva e **fixada** (screen pinning):
+Home e Recentes ficam bloqueados enquanto a criança brinca.
 
-| | | | | |
-|---|---|---|---|---|
-| ![](store/screenshots/01-fluxo.png) | ![](store/screenshots/02-um-dedo.png) | ![](store/screenshots/03-tres-dedos.png) | ![](store/screenshots/04-explosao.png) | ![](store/screenshots/05-trilha.png) |
+**✨ Partículas** — milhares de pontos de luz em correntes suaves. Cada dedo
+(até 10 ao mesmo tempo) vira um vórtice com cor própria; dedo parado "respira",
+gira a cor como arco-íris, solta pulsos e um chafariz de faíscas; arrastar deixa
+uma fita luminosa e faíscas; soltar explode.
+
+**🌊 Fluido** — simulação de fluido de verdade (Navier–Stokes numa grade, estilo
+*stable fluids*) com tinta colorida saturada. Arrastar empurra o líquido e deixa
+rastros que viram cogumelos e redemoinhos; dedo parado faz uma espiral de cor
+girando com pulsos; sem toque, o fluido "respira" cores sozinho.
+
+**🌙 Luz no escuro** — tela preta. Cada dedo é um emissor de coisas brilhantes:
+faíscas, fumaça colorida, rajadas de vento, estrelas, bolhas, borboletas
+batendo asa e corações. Sai mais quanto mais rápido o dedo anda. Quando os
+toques param, tudo se apaga e a tela volta ao preto.
+
+**Sair**: na brincadeira, o botão/gesto **Voltar** volta ao menu; no menu, **Voltar**
+desfixa e fecha o app. (Com a tela fixada, o Android entrega ao app só o Voltar;
+as teclas de volume passam a ser do sistema. Sem fixação, qualquer tecla física sai.)
+
+| Menu | Partículas | Fluido | Luz no escuro |
+|---|---|---|---|
+| ![](store/screenshots/01-menu.png) | ![](store/screenshots/03-particulas-dedo.png) | ![](store/screenshots/04-fluido.png) | ![](store/screenshots/07-escuro-dedo.png) |
 
 ## Instalar
 
@@ -33,9 +42,10 @@ Baixe o `Particulas.apk` da [página de Releases](https://github.com/rodrigofran
 abra no celular e aceite "instalar de fonte desconhecida". Requer Android 8.0+.
 
 > **Fixação de tela.** Para o bloqueio de Home/Recentes funcionar, ative em
-> *Configurações → Segurança → Fixar tela* (o nome varia por fabricante). Sem
-> isso o app funciona normalmente, só não fixa. Para desfixar manualmente:
-> segure **Voltar + Recentes** (ou deslize de baixo e segure, em navegação por gestos).
+> *Configurações → Segurança → Fixar tela* (o nome varia por fabricante) e
+> confirme o diálogo "Fixar este app?" que aparece ao abrir. Sem isso o app
+> funciona normalmente, só não fixa. Para desfixar manualmente: segure
+> **Voltar + Recentes** (ou deslize de baixo e segure, em navegação por gestos).
 
 ## Compilar
 
@@ -64,18 +74,34 @@ keytool -genkeypair -v -keystore app/keystore/particulas.jks -alias particulas \
 
 ## Código
 
-Sem dependências além do SDK — dois arquivos Kotlin:
+Sem dependências além do SDK, Kotlin puro:
 
+- [`KioskActivity.kt`](app/src/main/kotlin/br/com/rfranklin/particulas/KioskActivity.kt):
+  base das telas — modo imersivo, tela ligada, recorte da câmera, teclas físicas.
+- [`MenuActivity.kt`](app/src/main/kotlin/br/com/rfranklin/particulas/MenuActivity.kt):
+  menu dos três modos e fixação de tela (`startLockTask`).
 - [`MainActivity.kt`](app/src/main/kotlin/br/com/rfranklin/particulas/MainActivity.kt):
-  modo imersivo, fixação de tela, sair com qualquer tecla.
+  a brincadeira — instancia a view do modo escolhido.
+- [`SimView.kt`](app/src/main/kotlin/br/com/rfranklin/particulas/SimView.kt):
+  base das simulações — `SurfaceView` com thread própria de física + desenho e
+  rastreamento de todos os dedos (cada um com cor que gira enquanto está na tela).
 - [`ParticleView.kt`](app/src/main/kotlin/br/com/rfranklin/particulas/ParticleView.kt):
-  `SurfaceView` com thread própria; física (campo de fluxo rotacional, vórtices
-  por dedo, respiração/pulsos, faíscas, fitas) e desenho em lotes
-  (`drawLines` agrupado por matiz × brilho, mistura aditiva).
+  modo Partículas — campo de fluxo rotacional, vórtices por dedo,
+  respiração/pulsos, faíscas, fitas; desenho em lotes (`drawLines` por matiz ×
+  brilho, mistura aditiva).
+- [`FluidView.kt`](app/src/main/kotlin/br/com/rfranklin/particulas/FluidView.kt):
+  modo Fluido — *stable fluids* (advecção semi-lagrangiana, projeção
+  Gauss-Seidel, confinamento de vorticidade) numa grade de ~3,6 dp por célula,
+  tinta RGB com *tone mapping*, desenhada como bitmap ampliado.
+- [`EmitterView.kt`](app/src/main/kotlin/br/com/rfranklin/particulas/EmitterView.kt):
+  modo Luz no escuro — pool de entidades (faísca, fumaça, vento, estrela, bolha,
+  borboleta, coração, anel) com vida curta, emitidas ao longo do caminho do dedo.
 
-[`prototype/proto.html`](prototype/proto.html) é uma cópia 1:1 da física em
-Canvas/JS, usada para ajustar constantes no navegador
+[`prototype/proto.html`](prototype/proto.html) é uma cópia 1:1 da física do modo
+Partículas em Canvas/JS, usada para ajustar constantes no navegador
 (`python prototype/server.py` e abra `http://localhost:8765/proto.html`).
+[`tools/emu.sh`](tools/emu.sh) compila, instala e captura telas no emulador
+(as capturas em `store/screenshots/` vieram de lá).
 
 Os materiais para a loja (ícone, gráfico de destaque, capturas, textos da ficha
 e passo a passo de publicação) estão em [`store/`](store/).
@@ -88,8 +114,11 @@ e passo a passo de publicação) estão em [`store/`](store/).
 
 ## English
 
-**Partículas** is a full-screen, kiosk-style glowing-particle toy for kids on
-Android. Up to 10 simultaneous fingers, each a colored vortex; holding a finger
-cycles colors, "breathes", pulses and reverses spin; dragging leaves a light
-ribbon and sparks; releasing explodes. No menus, ads, internet or data
-collection. Any hardware key exits. Pure Kotlin, no dependencies. MIT licensed.
+**Partículas** is a full-screen, kiosk-style (screen-pinned, portrait-only)
+light toy for kids on Android with three modes: **Particles** (thousands of
+glowing particles, up to 10 simultaneous finger vortices with color cycling,
+breathing, pulses, ribbons and sparks), **Fluid** (a real stable-fluids
+Navier–Stokes solver with saturated dye) and **Light in the dark** (black
+screen; each finger emits sparks, colored smoke, wind, stars, bubbles,
+butterflies and hearts that fade away when touching stops). No ads, internet or
+data collection. Back exits. Pure Kotlin, no dependencies. MIT licensed.

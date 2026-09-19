@@ -9,15 +9,11 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RadialGradient
 import android.graphics.Shader
-import android.view.MotionEvent
-import android.view.SurfaceHolder
-import android.view.SurfaceView
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
-import kotlin.random.Random
 
 /**
  * Milhares de partículas coloridas num SurfaceView com thread própria.
@@ -27,7 +23,7 @@ import kotlin.random.Random
  *   própria: atrai, faz girar, e as partículas próximas brilham e mudam de cor.
  * - Ao tirar o dedo: explosão que espalha as partículas com a cor daquele dedo.
  */
-class ParticleView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
+class ParticleView(context: Context) : SimView(context) {
 
     // ---------- partículas ----------
     private var n = 0
@@ -38,31 +34,14 @@ class ParticleView(context: Context) : SurfaceView(context), SurfaceHolder.Callb
     private var hue = FloatArray(0)
     private var glow = FloatArray(0)
 
-    // ---------- dedos (escrito pela UI thread, lido pela thread de física) ----------
-    private val lock = Any()
-    private val fingerId = IntArray(MAX_FINGERS) { -1 }
-    private val fingerX = FloatArray(MAX_FINGERS)
-    private val fingerY = FloatArray(MAX_FINGERS)
-    private val fingerHue = FloatArray(MAX_FINGERS)
-    private val fingerAge = FloatArray(MAX_FINGERS)
-    private val fingerSeq = IntArray(MAX_FINGERS)
-    private var seqCounter = 0
-    private var nextHue = Random.nextFloat() * 360f
-
-    // explosões pendentes (x, y, hue) — geradas quando um dedo sai da tela
+    // explosões pendentes (UI thread, sob lock) — geradas quando um dedo sai da tela
     private val burstX = FloatArray(MAX_BURSTS)
     private val burstY = FloatArray(MAX_BURSTS)
     private val burstHue = FloatArray(MAX_BURSTS)
     private val burstStrength = FloatArray(MAX_BURSTS)
     private var burstCount = 0
 
-    // cópias locais usadas pela thread de física (evita segurar o lock durante o passo)
-    private val fActive = BooleanArray(MAX_FINGERS)
-    private val fX = FloatArray(MAX_FINGERS)
-    private val fY = FloatArray(MAX_FINGERS)
-    private val fHue = FloatArray(MAX_FINGERS)
-    private val fAge = FloatArray(MAX_FINGERS)
-    private val fSeq = IntArray(MAX_FINGERS)
+    // ---------- estado por dedo, lado da física ----------
     private val fLastSeq = IntArray(MAX_FINGERS) { -1 }
     private val fPulses = IntArray(MAX_FINGERS)      // pulsos já emitidos por este dedo
     private val fSpin = FloatArray(MAX_FINGERS)      // sentido de rotação (+1/-1)
@@ -94,11 +73,6 @@ class ParticleView(context: Context) : SurfaceView(context), SurfaceHolder.Callb
     private var sNext = 0
 
     // ---------- geometria / constantes em pixels ----------
-    private val dp = resources.displayMetrics.density
-    @Volatile private var pendingW = 0
-    @Volatile private var pendingH = 0
-    private var w = 0
-    private var h = 0
     private var reach = 0f          // raio de influência do dedo
     private var burstReach = 0f     // raio da explosão
     private val core = 34f * dp     // núcleo que empurra (evita colapsar num ponto)
@@ -120,14 +94,8 @@ class ParticleView(context: Context) : SurfaceView(context), SurfaceHolder.Callb
     private val glowRadius = 110f * dp
     private val hsv = FloatArray(3)
 
-    private var thread: Thread? = null
-    @Volatile private var running = false
-    private var time = 0f
-    private val rnd = Random(System.nanoTime())
 
     init {
-        holder.addCallback(this)
-        isFocusable = true
         setupPaints()
     }
 
@@ -157,31 +125,9 @@ class ParticleView(context: Context) : SurfaceView(context), SurfaceHolder.Callb
         trailPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.ADD)
     }
 
-    // ================= ciclo de vida da surface =================
+    // ================= tamanho =================
 
-    override fun surfaceCreated(holder: SurfaceHolder) {
-        running = true
-        thread = Thread(::loop, "particles").also { it.start() }
-    }
-
-    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        pendingW = width
-        pendingH = height
-    }
-
-    override fun surfaceDestroyed(holder: SurfaceHolder) {
-        running = false
-        thread?.join()
-        thread = null
-    }
-
-    private fun applyResize() {
-        val nw = pendingW
-        val nh = pendingH
-        if (nw == w && nh == h) return
-        val first = n == 0
-        w = nw
-        h = nh
+    override fun onSizeReady(first: Boolean) {
         reach = 0.42f * min(w, h)
         burstReach = 0.6f * min(w, h)
         if (first) {
@@ -201,66 +147,16 @@ class ParticleView(context: Context) : SurfaceView(context), SurfaceHolder.Callb
         }
     }
 
-    // ================= loop principal =================
-
-    private fun loop() {
-        var last = System.nanoTime()
-        while (running) {
-            val now = System.nanoTime()
-            val dt = ((now - last) / 1e9f).coerceIn(1f / 240f, 1f / 30f)
-            last = now
-
-            applyResize()
-            if (w == 0 || h == 0) {
-                Thread.sleep(8)
-                continue
-            }
-
-            snapshotInput(dt)
-            step(dt)
-
-            val canvas: Canvas = try {
-                holder.lockHardwareCanvas() ?: continue
-            } catch (e: Exception) {
-                break
-            }
-            try {
-                render(canvas)
-            } finally {
-                try {
-                    holder.unlockCanvasAndPost(canvas)
-                } catch (_: Exception) {
-                }
-            }
+    override fun snapshotExtra() {
+        bCount = burstCount
+        for (i in 0 until bCount) {
+            bX[i] = burstX[i]
+            bY[i] = burstY[i]
+            bHue[i] = burstHue[i]
+            bStrength[i] = burstStrength[i]
         }
+        burstCount = 0
     }
-
-    private fun snapshotInput(dt: Float) {
-        synchronized(lock) {
-            for (i in 0 until MAX_FINGERS) {
-                fActive[i] = fingerId[i] >= 0
-                if (fActive[i]) {
-                    fingerAge[i] += dt
-                    fX[i] = fingerX[i]
-                    fY[i] = fingerY[i]
-                    fHue[i] = heldHue(i)
-                    fAge[i] = fingerAge[i]
-                    fSeq[i] = fingerSeq[i]
-                }
-            }
-            bCount = burstCount
-            for (i in 0 until bCount) {
-                bX[i] = burstX[i]
-                bY[i] = burstY[i]
-                bHue[i] = burstHue[i]
-                bStrength[i] = burstStrength[i]
-            }
-            burstCount = 0
-        }
-    }
-
-    /** Cor do dedo: a inicial girando devagar enquanto ele fica na tela (arco-íris). */
-    private fun heldHue(slot: Int): Float = (fingerHue[slot] + fingerAge[slot] * HUE_SPIN) % 360f
 
     /**
      * Evolução de um dedo segurado: respiração (puxa/empurra), rotação que
@@ -303,9 +199,8 @@ class ParticleView(context: Context) : SurfaceView(context), SurfaceHolder.Callb
 
     // ================= física =================
 
-    private fun step(dt: Float) {
+    override fun step(dt: Float) {
         val s = dt * 60f            // escala "por frame a 60 Hz"
-        time += dt
         val t = time
         val reach2 = reach * reach
         val flowK = 0.0345f / dp
@@ -480,18 +375,9 @@ class ParticleView(context: Context) : SurfaceView(context), SurfaceHolder.Callb
         }
     }
 
-    private fun lerpHue(from: Float, to: Float, k: Float): Float {
-        var d = (to - from) % 360f
-        if (d > 180f) d -= 360f
-        if (d < -180f) d += 360f
-        return from + d * k
-    }
-
-    private fun pow(base: Float, e: Float): Float = Math.pow(base.toDouble(), e.toDouble()).toFloat()
-
     // ================= desenho =================
 
-    private fun render(c: Canvas) {
+    override fun render(c: Canvas) {
         c.drawColor(Color.BLACK)
 
         // halo suave em cada dedo, crescendo um pouco enquanto segura
@@ -598,74 +484,23 @@ class ParticleView(context: Context) : SurfaceView(context), SurfaceHolder.Callb
         }
     }
 
-    private fun withAlpha(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)
-
     // ================= toque =================
 
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-                val idx = event.actionIndex
-                fingerDown(event.getPointerId(idx), event.getX(idx), event.getY(idx))
-            }
-            MotionEvent.ACTION_MOVE -> synchronized(lock) {
-                for (idx in 0 until event.pointerCount) {
-                    val slot = slotOf(event.getPointerId(idx))
-                    if (slot >= 0) {
-                        fingerX[slot] = event.getX(idx)
-                        fingerY[slot] = event.getY(idx)
-                    }
-                }
-            }
-            MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP -> {
-                val idx = event.actionIndex
-                fingerUp(event.getPointerId(idx), event.getX(idx), event.getY(idx))
-            }
-            MotionEvent.ACTION_CANCEL -> synchronized(lock) {
-                for (i in 0 until MAX_FINGERS) fingerId[i] = -1
-            }
-        }
-        return true
-    }
-
-    private fun slotOf(id: Int): Int {
-        for (i in 0 until MAX_FINGERS) if (fingerId[i] == id) return i
-        return -1
-    }
-
-    private fun fingerDown(id: Int, x: Float, y: Float): Unit = synchronized(lock) {
-        var slot = slotOf(id)
-        if (slot < 0) slot = slotOf(-1)
-        if (slot < 0) return
-        fingerId[slot] = id
-        fingerX[slot] = x
-        fingerY[slot] = y
-        fingerAge[slot] = 0f
-        fingerSeq[slot] = ++seqCounter
-        fingerHue[slot] = nextHue
-        nextHue = (nextHue + 137.5f) % 360f   // ângulo áureo: cores bem distintas
-    }
-
-    private fun fingerUp(id: Int, x: Float, y: Float): Unit = synchronized(lock) {
-        val slot = slotOf(id)
-        if (slot < 0) return
-        fingerId[slot] = -1
+    override fun onFingerReleased(slot: Int, x: Float, y: Float, hue: Float) {
         if (burstCount < MAX_BURSTS) {
             burstX[burstCount] = x
             burstY[burstCount] = y
-            burstHue[burstCount] = heldHue(slot)
+            burstHue[burstCount] = hue
             burstStrength[burstCount] = 1f
             burstCount++
         }
     }
 
     private companion object {
-        const val MAX_FINGERS = 16
         const val MAX_BURSTS = 16
         const val HUE_BINS = 12
         const val GLOW_LEVELS = 4
         const val TRAIL = 2.5f
-        const val HUE_SPIN = 30f        // graus por segundo com o dedo na tela
         const val PULSE_PERIOD = 3f     // segundos entre pulsos de um dedo segurado
         const val TRAIL_LEN = 40        // pontos da fita atrás do dedo
         const val MAX_SPARKS = 1200

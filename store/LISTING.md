@@ -9,11 +9,11 @@ Tudo o que você precisa colar no Play Console. Os arquivos gráficos estão nes
 | Pacote do app | `Particulas-release.aab` (raiz do projeto, gerado por `./gradlew bundleRelease`) | `.aab` assinado |
 | Ícone | `icon-512.png` | 512×512 PNG |
 | Gráfico de destaque | `feature-graphic-1024x500.png` | 1024×500 |
-| Capturas (telefone) | `screenshots/01..05-*.png` | 2 a 8, 9:16, ≥320 px |
+| Capturas (telefone) | `screenshots/01..07-*.png` (capturadas no emulador Pixel 6, 1080×2400) | 2 a 8, 9:16, ≥320 px |
 | Política de privacidade | https://github.com/rodrigofranklin/particulas/blob/main/PRIVACY.md | URL pública |
 
-> As capturas foram renderizadas pelo protótipo (mesma física). Se quiser,
-> substitua por capturas reais do seu celular (botão liga/desliga + volume −).
+> As capturas são do app real rodando no emulador. Se quiser, substitua por
+> capturas do seu celular (botão liga/desliga + volume −).
 
 ## Textos
 
@@ -34,16 +34,17 @@ Partículas de luz que reagem aos seus dedos. Sem anúncios, sem internet.
 ```
 Encoste os dedos na tela e brinque com a luz.
 
-Partículas é um brinquedo visual feito para crianças (e para quem gosta de ver coisas bonitas): milhares de partículas coloridas que flutuam em correntes suaves e reagem a cada toque.
+Partículas é um brinquedo visual feito para crianças (e para quem gosta de ver coisas bonitas). Abre num menu com três botões grandes e três modos:
 
-• Use até 10 dedos ao mesmo tempo — cada um vira um redemoinho com a sua própria cor.
-• Segure o dedo parado: a cor gira como um arco-íris, o redemoinho "respira", solta pulsos de choque e inverte o giro, enquanto um chafariz de faíscas sai em espiral.
-• Arraste: uma fita de luz segue o dedo e faíscas voam pelo caminho.
-• Solte: as partículas explodem com a cor do dedo.
+✨ PARTÍCULAS — milhares de pontinhos de luz flutuando em correntes suaves. Use até 10 dedos ao mesmo tempo: cada um vira um redemoinho com a sua própria cor. Segure o dedo parado e a cor gira como um arco-íris, o redemoinho "respira", solta pulsos e um chafariz de faíscas. Arraste e uma fita de luz segue o dedo. Solte e tudo explode.
+
+🌊 FLUIDO — um líquido colorido de verdade (simulação de fluido). Arraste e o dedo empurra o líquido, deixando rastros que viram cogumelos e redemoinhos. Segure e nasce uma espiral de cor girando. Cores fortes, saturadas, intensas.
+
+🌙 LUZ NO ESCURO — a tela fica preta. Cada dedo solta um monte de coisas brilhantes: faíscas, fumaça colorida, rajadas de vento, estrelas, bolhas, borboletas batendo asa e corações. Quanto mais rápido o dedo, mais coisas saem. Quando os toques param, tudo se apaga e a tela volta ao escuro.
 
 Feito para as mãos pequenas:
-• Tela cheia, sem menus, sem botões, sem nada para apertar por engano.
-• Fixação de tela: com a opção "Fixar tela" ativada nas configurações do Android, os botões Início e Recentes ficam bloqueados enquanto a criança brinca. Para sair, basta apertar qualquer tecla física (voltar ou volume).
+• Tela cheia, sem botões dentro da brincadeira, nada para apertar por engano. Não gira.
+• Fixação de tela: com a opção "Fixar tela" ativada nas configurações do Android, os botões Início e Recentes ficam bloqueados enquanto a criança brinca. O botão Voltar leva ao menu e, no menu, fecha o app.
 • A tela não apaga sozinha.
 
 Sem anúncios. Sem compras. Sem internet. Sem coleta de dados. Nenhuma permissão.
